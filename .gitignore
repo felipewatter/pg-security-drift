@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+coverage/
+.env
+.env.*
+*.snapshot.json
+*.sarif
+*.report.json
+*.report.txt
