@@ -1,0 +1,57 @@
+name: Publish PG Security Drift v0.1.0
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/publish-v0.1.0.yml
+permissions:
+  contents: write
+jobs:
+  publish:
+    name: Publish verified stable v0.1.0
+    if: github.repository == 'felipewatter/pg-security-drift'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release notes
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify pinned commit and metadata
+        shell: bash
+        env:
+          RELEASE_COMMIT: 86fb6077d40c5ef40bc242a3534434a44768ac96
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$RELEASE_COMMIT" HEAD
+          test -s .github/release-notes/v0.1.0.md
+          git show "$RELEASE_COMMIT:pyproject.toml" | grep -Eq '^version = "0\.1\.0"$'
+      - name: Set up Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Recheck source and build release wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -e .
+          python -m unittest discover -s tests -p 'test_*.py' -v
+          python -m pip wheel . --no-deps -w dist
+          test -n "$(find dist -maxdepth 1 -name '*.whl' -print -quit)"
+      - name: Publish stable GitHub Release exactly once
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_COMMIT: 86fb6077d40c5ef40bc242a3534434a44768ac96
+        run: |
+          set -euo pipefail
+          if gh release view v0.1.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release v0.1.0 already exists; no replacement performed."
+            exit 0
+          fi
+          gh release create v0.1.0 dist/*.whl \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$RELEASE_COMMIT" \
+            --title "PG Security Drift v0.1.0 — PostgreSQL RLS & Privilege Drift Guard" \
+            --notes-file .github/release-notes/v0.1.0.md \
+            --latest
