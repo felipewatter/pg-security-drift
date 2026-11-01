@@ -1,0 +1,92 @@
+name: Security CI
+on:
+  push:
+    branches: [main, 'feature/**', 'security/**']
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  unit:
+    name: Python ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ['3.11', '3.12', '3.13', '3.14']
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install without runtime dependencies
+        run: python -m pip install -e .
+      - name: Unit tests and controlled synthetic fixtures
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Python syntax validation
+        run: python -m compileall -q src
+      - name: Entry point help
+        run: pg-security-drift --help
+
+  live-postgres:
+    name: Live SQL catalog capture / PostgreSQL 17
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: integration-test-only
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: integration-test-only
+      PGDATABASE: postgres
+      PGSSLMODE: disable  # ephemeral loopback CI service only
+      PG_SECURITY_DRIFT_INTEGRATION: '1'
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Install CLI and create isolated test fixtures
+        run: |
+          python -m pip install -e .
+          psql -X -w -v ON_ERROR_STOP=1 -f tests/sql/fixture.sql
+      - name: Execute read-only catalog query against real PostgreSQL
+        run: python -m unittest discover -s tests -p 'integration_*.py' -v
+      - name: Capture and audit without modifying PostgreSQL
+        run: |
+          pg-security-drift snapshot --output /tmp/pg-drift-snapshot.json
+          pg-security-drift audit --input /tmp/pg-drift-snapshot.json --format json --fail-on none
+
+  packaging:
+    name: Package and metadata validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13'
+      - name: Build wheel and check package metadata
+        run: |
+          python -m pip wheel . --no-deps -w dist
+          python -m pip check

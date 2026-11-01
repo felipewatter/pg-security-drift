@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=75,<90"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pg-security-drift"
+version = "0.1.0"
+description = "Read-only PostgreSQL privilege and RLS drift monitoring with security findings and CI baselines"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{name = "Felipe Watter"}]
+license = "MIT"
+keywords = ["postgresql", "row-level-security", "supabase", "neon", "devsecops", "policy-drift"]
+dependencies = []
+classifiers = ["Development Status :: 3 - Alpha", "Programming Language :: Python :: 3", "Topic :: Security"]
+
+[project.scripts]
+pg-security-drift = "pg_security_drift.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pg_security_drift = ["sql/*.sql"]
