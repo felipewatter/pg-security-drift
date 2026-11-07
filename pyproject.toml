@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pg-security-drift"
-version = "0.1.0"
+version = "0.1.1"
 description = "Read-only PostgreSQL privilege and RLS drift monitoring with security findings and CI baselines"
 readme = "README.md"
 requires-python = ">=3.11"
